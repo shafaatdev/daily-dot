@@ -1,0 +1,125 @@
+<section class="page dashboard-page">
+  <header class="page-heading dashboard-heading">
+    <div>
+      <p class="eyebrow">{{ todayForDisplay | date: 'EEEE, MMMM d, y' }}</p>
+      <h1>{{ greeting }}.</h1>
+      <p class="lede">Make a little room for how today felt.</p>
+    </div>
+    @if (todayEntry(); as entry) {
+      <a class="button button-primary" [routerLink]="['/journal', entry.id]">
+        <span aria-hidden="true">↗</span> View/Edit Today's Journal
+      </a>
+    } @else {
+      <a class="button button-primary" [routerLink]="['/journal/new']">
+        <span aria-hidden="true">＋</span> Add Today's Journal
+      </a>
+    }
+  </header>
+
+  <section class="stats-grid" aria-label="Journal statistics">
+    <article class="stat-block">
+      <span class="stat-label">Entries written</span>
+      <strong>{{ statistics().total }}</strong>
+      <span class="stat-note">your journal, over time</span>
+    </article>
+    <article class="stat-block stat-accent">
+      <span class="stat-label">Current streak</span>
+      <strong>{{ statistics().currentStreak }} <small>{{ statistics().currentStreak === 1 ? 'day' : 'days' }}</small></strong>
+      <span class="stat-note">one day at a time</span>
+    </article>
+    <article class="stat-block">
+      <span class="stat-label">This month</span>
+      <strong>{{ statistics().entriesThisMonth }}</strong>
+      <span class="stat-note">entries in {{ today | date: 'MMMM' }}</span>
+    </article>
+    <article class="stat-block">
+      <span class="stat-label">Most frequent mood</span>
+      @if (statistics().mostFrequentMood; as mood) {
+        <strong class="mood-stat"><span>{{ mood.emoji }}</span> {{ mood.label }}</strong>
+        <span class="stat-note">across all entries</span>
+      } @else {
+        <strong class="mood-stat">—</strong>
+        <span class="stat-note">still getting to know you</span>
+      }
+    </article>
+  </section>
+
+  <section class="mood-prompt" aria-labelledby="mood-prompt-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">A quick check-in</p>
+        <h2 id="mood-prompt-title">How are you feeling?</h2>
+      </div>
+      <span class="section-aside">Choose a mood to start today's entry</span>
+    </div>
+    <div class="mood-options">
+      @for (mood of moods; track mood.value) {
+        <a class="mood-option" [routerLink]="['/journal/new']" [queryParams]="{ mood: mood.value }">
+          <span class="mood-emoji" aria-hidden="true">{{ mood.emoji }}</span>
+          <span>{{ mood.label }}</span>
+        </a>
+      }
+    </div>
+  </section>
+
+  <div class="dashboard-columns">
+    <section class="recent-section" aria-labelledby="recent-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Your thoughts, gathered</p>
+          <h2 id="recent-title">Recent entries</h2>
+        </div>
+        <a class="text-link" routerLink="/journal">See all <span aria-hidden="true">→</span></a>
+      </div>
+      @if (recentEntries().length) {
+        <div class="entry-list">
+          @for (entry of recentEntries(); track entry.id) {
+            <a class="entry-row" [routerLink]="['/journal', entry.id]">
+              <span class="entry-date">{{ localDate(entry.date) | date: 'MMM d' }}</span>
+              <span class="entry-mood" aria-label="Mood">
+                {{ moodEmoji(entry.mood) }}
+              </span>
+              <span class="entry-copy">
+                <strong>{{ entry.title || 'Untitled entry' }}</strong>
+                <span>{{ entry.content }}</span>
+              </span>
+              <span class="row-arrow" aria-hidden="true">↗</span>
+            </a>
+          }
+        </div>
+      } @else {
+        <div class="empty-inline">
+          <span class="empty-mark" aria-hidden="true">✳</span>
+          <p>Your first entry is waiting whenever you are.</p>
+          <a class="text-link" routerLink="/journal/new">Write an entry <span aria-hidden="true">→</span></a>
+        </div>
+      }
+    </section>
+
+    <section class="trend-section" aria-labelledby="trend-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">A small look back</p>
+          <h2 id="trend-title">Mood lately</h2>
+        </div>
+      </div>
+      @if (moodTrend().length) {
+        <div class="mood-trend">
+          @for (entry of moodTrend(); track entry.id) {
+            <div class="trend-day">
+              <span class="trend-date">{{ localDate(entry.date) | date: 'EEE' }}</span>
+              <span class="trend-mood" [attr.title]="moodLabel(entry.mood)">{{ moodEmoji(entry.mood) }}</span>
+              <span class="trend-dot" [attr.data-mood]="entry.mood"></span>
+            </div>
+          }
+        </div>
+        <p class="trend-caption">Each note is a point in your own story.</p>
+      } @else {
+        <div class="trend-empty">
+          <span aria-hidden="true">◌</span>
+          <p>Your mood history will take shape here.</p>
+        </div>
+      }
+    </section>
+  </div>
+</section>

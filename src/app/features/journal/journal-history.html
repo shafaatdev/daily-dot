@@ -1,0 +1,83 @@
+<section class="page history-page">
+  <header class="page-heading">
+    <div>
+      <p class="eyebrow">Your personal archive</p>
+      <h1>My Journal</h1>
+      <p class="lede">A collection of days, exactly as they were.</p>
+    </div>
+    <a class="button button-primary" routerLink="/journal/new"><span aria-hidden="true">＋</span> New entry</a>
+  </header>
+
+  <section class="history-tools" aria-label="Filter journal entries">
+    <label class="search-field">
+      <span class="field-icon" aria-hidden="true">⌕</span>
+      <span class="visually-hidden">Search titles and content</span>
+      <input
+        #searchInput
+        type="search"
+        placeholder="Search your entries"
+        [value]="query()"
+        (input)="query.set(searchInput.value)"
+      />
+    </label>
+    <label class="filter-control">
+      <span>Mood</span>
+      <select #moodInput [value]="selectedMood()" (change)="selectedMood.set(moodInput.value)">
+        <option value="all">All moods</option>
+        @for (mood of moods; track mood.value) {
+          <option [value]="mood.value">{{ mood.emoji }} {{ mood.label }}</option>
+        }
+      </select>
+    </label>
+    <label class="filter-control">
+      <span>Month</span>
+      <input
+        #monthInput
+        type="month"
+        aria-label="Filter by month"
+        [value]="selectedMonth()"
+        (change)="selectedMonth.set(monthInput.value)"
+      />
+    </label>
+  </section>
+
+  <div class="history-summary">
+    <span>{{ entries().length }} {{ entries().length === 1 ? 'entry' : 'entries' }}</span>
+    @if (query() || selectedMood() !== 'all' || selectedMonth()) {
+      <button
+        class="text-button"
+        type="button"
+        (click)="query.set(''); selectedMood.set('all'); selectedMonth.set('')"
+      >Clear filters</button>
+    }
+  </div>
+
+  @if (entries().length) {
+    <div class="history-list">
+      @for (entry of entries(); track entry.id) {
+        <a class="history-entry" [routerLink]="['/journal', entry.id]">
+          <span class="history-date">{{ localDate(entry.date) | date: 'MMM d, y' }}</span>
+          <span class="history-mood" [attr.title]="moodLabel(entry.mood)">{{ moodEmoji(entry.mood) }}</span>
+          <span class="history-entry-main">
+            <strong>{{ entry.title || 'Untitled entry' }}</strong>
+            <span class="history-preview">{{ entry.content }}</span>
+          </span>
+          <span class="history-updated">Updated {{ entry.updatedAt | date: 'MMM d, h:mm a' }}</span>
+          <span class="row-arrow" aria-hidden="true">↗</span>
+        </a>
+      }
+    </div>
+  } @else {
+    <div class="empty-state">
+      <span class="empty-mark" aria-hidden="true">✳</span>
+      @if (query() || selectedMood() !== 'all' || selectedMonth()) {
+        <h2>No entries found</h2>
+        <p>Try a different search or clear your filters.</p>
+      } @else {
+        <h2>Your journal starts here</h2>
+        <p>Some days are worth keeping. Begin with the one you're in.</p>
+        <a class="button button-primary" routerLink="/journal/new">Write your first entry</a>
+      }
+    </div>
+  }
+</section>

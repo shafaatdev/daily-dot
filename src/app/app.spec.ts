@@ -1,10 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { App } from './app';
+import { provideRouter } from '@angular/router';
+import { routes } from './app.routes';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 describe('App', () => {
   beforeEach(async () => {
+    localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [provideRouter(routes)],
     })
       .compileComponents();
   });
@@ -15,10 +20,10 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render title', async () => {
+  it('should render primary navigation', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, daily-dot');
+    expect(compiled.querySelector('.primary-nav')?.textContent).toContain('My Journal');
   });
 });

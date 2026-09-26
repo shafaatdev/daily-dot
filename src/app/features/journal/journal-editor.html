@@ -1,0 +1,74 @@
+<section class="page editor-page">
+  @if (missingEntry()) {
+    <div class="empty-state">
+      <span class="empty-mark" aria-hidden="true">◌</span>
+      <h1>Entry not found</h1>
+      <p>It may have been deleted, or it belongs to another local profile.</p>
+      <a class="button button-primary" routerLink="/journal">Back to My Journal</a>
+    </div>
+  } @else {
+    <header class="page-heading editor-heading">
+      <div>
+        <a class="back-link" routerLink="/journal">← My Journal</a>
+        <p class="eyebrow">{{ entryId() ? 'A moment, revisited' : 'A moment, kept' }}</p>
+        <h1>{{ entryId() ? 'Edit entry' : 'New journal entry' }}</h1>
+      </div>
+    </header>
+
+    @if (duplicateEntryId(); as duplicateId) {
+      <div class="notice notice-warning" role="alert">
+        <span>This date already has an entry. Open it to make changes.</span>
+        <a class="text-link" [routerLink]="['/journal', duplicateId]">View existing entry →</a>
+      </div>
+    }
+    @if (saveError()) {
+      <div class="notice notice-error" role="alert">{{ saveError() }}</div>
+    }
+
+    <form class="editor-form" [formGroup]="form" (ngSubmit)="save()">
+      <div class="editor-meta">
+        <label class="form-field date-field">
+          <span class="field-label">Date</span>
+          <input type="date" formControlName="date" [max]="today" />
+          @if (form.controls.date.touched && form.controls.date.hasError('futureDate')) {
+            <span class="field-error">Choose today or a past date.</span>
+          }
+        </label>
+        <fieldset class="mood-fieldset">
+          <legend class="field-label">How did it feel?</legend>
+          <div class="editor-moods">
+            @for (mood of moods; track mood.value) {
+              <label class="editor-mood-option">
+                <input type="radio" formControlName="mood" [value]="mood.value" />
+                <span class="editor-mood-choice">
+                  <span>{{ mood.emoji }}</span><span>{{ mood.label }}</span>
+                </span>
+              </label>
+            }
+          </div>
+        </fieldset>
+      </div>
+
+      <label class="form-field title-field">
+        <span class="field-label">Title</span>
+        <input type="text" formControlName="title" maxlength="120" placeholder="Give this day a name" />
+        @if (form.controls.title.touched && form.controls.title.hasError('required')) {
+          <span class="field-error">Add a title before saving.</span>
+        }
+      </label>
+
+      <label class="form-field content-field">
+        <span class="field-label">Your journal</span>
+        <textarea formControlName="content" rows="12" placeholder="Start wherever your thoughts are..." spellcheck="true"></textarea>
+        @if (form.controls.content.touched && form.controls.content.hasError('required')) {
+          <span class="field-error">Write a few words before saving.</span>
+        }
+      </label>
+
+      <footer class="editor-actions">
+        <a class="button button-quiet" routerLink="/journal">Cancel</a>
+        <button class="button button-primary" type="submit">Save entry <span aria-hidden="true">→</span></button>
+      </footer>
+    </form>
+  }
+</section>
