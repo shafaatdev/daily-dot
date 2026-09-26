@@ -11,6 +11,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { JournalDraft, Mood, MOODS } from '../../core/models/journal-entry';
 import { JournalService } from '../../core/services/journal.service';
+import { getPastWeekDates } from './date-shortcuts';
 
 interface JournalForm {
   date: FormControl<string>;
@@ -31,6 +32,7 @@ export class JournalEditor {
   private readonly destroyRef = inject(DestroyRef);
   readonly moods = MOODS;
   readonly today = localDateString(new Date());
+  readonly recentDates = getPastWeekDates(this.today);
   readonly entryId = signal<string | undefined>(undefined);
   readonly missingEntry = signal(false);
   readonly duplicateEntryId = signal<string | undefined>(undefined);
@@ -77,6 +79,11 @@ export class JournalEditor {
         this.form.controls.mood.setValue(mood as Mood);
       }
     });
+  }
+
+  chooseDate(date: string): void {
+    this.form.controls.date.setValue(date);
+    this.form.controls.date.markAsTouched();
   }
 
   save(): void {

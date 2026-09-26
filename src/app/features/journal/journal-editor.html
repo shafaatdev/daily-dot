@@ -26,6 +26,22 @@
     }
 
     <form class="editor-form" [formGroup]="form" (ngSubmit)="save()">
+      <div class="date-shortcuts" aria-label="Recent dates">
+        @for (option of recentDates; track option.value) {
+          <button
+            type="button"
+            class="date-shortcut"
+            [class.is-selected]="form.controls.date.value === option.value"
+            [disabled]="option.value > today"
+            (click)="chooseDate(option.value)"
+            [attr.aria-pressed]="form.controls.date.value === option.value"
+          >
+            <span>{{ option.label }}</span>
+            <strong>{{ option.shortDate }}</strong>
+          </button>
+        }
+      </div>
+
       <div class="editor-meta">
         <label class="form-field date-field">
           <span class="field-label">Date</span>

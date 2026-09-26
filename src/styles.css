@@ -172,6 +172,13 @@ button { color: inherit; }
 .date-field input, .title-field input { min-height: 43px; padding: 0 11px; border: 1px solid var(--line); color: var(--text); background: var(--page-bg); }
 .date-field input { color-scheme: light; }
 .theme-dark .date-field input { color-scheme: dark; }
+.date-shortcuts { display: grid; grid-template-columns: repeat(7, minmax(72px, 1fr)); gap: 8px; margin-bottom: 22px; }
+.date-shortcut { display: grid; min-width: 0; gap: 3px; padding: 10px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--page-bg); color: var(--muted); cursor: pointer; text-align: center; transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease; }
+.date-shortcut span { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.date-shortcut strong { font-size: 11px; font-weight: 650; }
+.date-shortcut:hover:not(:disabled) { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
+.date-shortcut.is-selected { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.date-shortcut:disabled { opacity: 0.5; cursor: not-allowed; }
 .mood-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .editor-moods { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
 .editor-mood-option { position: relative; cursor: pointer; }
@@ -246,6 +253,7 @@ button { color: inherit; }
 	.history-entry { min-height: 165px; padding: 15px; }
 	.history-entry-main strong { font-size: 18px; }
 	.editor-form { padding: 20px 16px; }
+	.date-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.editor-meta { grid-template-columns: 1fr; gap: 19px; }
 	.editor-moods { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 	.editor-mood-choice { min-width: 0; padding-inline: 3px; }
