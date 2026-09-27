@@ -9,7 +9,13 @@ import { JournalService } from './core/services/journal.service';
 
 describe('App', () => {
   beforeEach(async () => {
-    localStorage.clear();
+    const storage = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
