@@ -1,127 +1,235 @@
+import '@angular/compiler';
+import { Injector, signal, WritableSignal } from '@angular/core';
+import { Session, SupabaseClient } from '@supabase/supabase-js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { JournalDraft, JournalEntry } from '../models/journal-entry';
+import { AuthService, AuthState } from './auth.service';
 import { JournalService } from './journal.service';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { SUPABASE_CLIENT } from './supabase-client';
 
-const USER_ID = 'active-local-user';
-const ENTRIES_KEY = 'daily-dot.entries.v1';
-const USER_KEY = 'daily-dot.local-user.v1';
-const SEED_KEY = `daily-dot.initial-data.v1.${USER_ID}`;
+const USER_A = 'user-a';
+const USER_B = 'user-b';
+
+interface TestRow {
+  id: string;
+  user_id: string;
+  entry_date: string;
+  title: string;
+  content: string;
+  mood: JournalEntry['mood'];
+  created_at: string;
+  updated_at: string;
+}
 
 describe('JournalService', () => {
+  let rows: TestRow[];
+  let authState: WritableSignal<AuthState>;
+  let journal: JournalService;
+  let injector: Injector;
+
   beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem(USER_KEY, USER_ID);
-    localStorage.setItem(SEED_KEY, 'true');
+    rows = [];
+    authState = signal<AuthState>(authenticatedState(USER_A));
+    const authMock = {
+      state: authState.asReadonly(),
+      whenReady: vi.fn(async () => authState()),
+      subscribeState: (listener: (state: AuthState) => void) => {
+        listener(authState());
+        return () => undefined;
+      },
+    };
+
+    injector = Injector.create({
+      providers: [
+        JournalService,
+        { provide: AuthService, useValue: authMock },
+        { provide: SUPABASE_CLIENT, useValue: createClient(rows) },
+      ],
+    });
+    journal = injector.get(JournalService);
   });
 
-  it('persists a new entry with the active local identity and timestamps', () => {
-    const journal = new JournalService();
-    const result = journal.save(draft('2026-03-10'));
+  it('loads only rows owned by the authenticated user', async () => {
+    rows.push(row('entry-a', USER_A, '2026-03-10'), row('entry-b', USER_B, '2026-03-09'));
+    await journal.retryLoad();
+
+    expect(journal.entries().map((entry) => entry.id)).toEqual(['entry-a']);
+  });
+
+  it('persists entries with authenticated ownership and a date-only value', async () => {
+    const result = await journal.save(draft('2026-03-10'));
 
     expect(result.status).toBe('saved');
-    if (result.status !== 'saved') return;
-    expect(result.entry.userId).toBe(USER_ID);
-    expect(result.entry.createdAt).toBeTruthy();
-    expect(result.entry.updatedAt).toBe(result.entry.createdAt);
-    expect(JSON.parse(localStorage.getItem(ENTRIES_KEY) ?? '[]')).toHaveLength(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.user_id).toBe(USER_A);
+    expect(rows[0]?.entry_date).toBe('2026-03-10');
   });
 
-  it('returns the existing entry when another entry uses the same date', () => {
-    const journal = new JournalService();
-    const existing = journal.save(draft('2026-03-10'));
-    const duplicate = journal.save({ ...draft('2026-03-10'), title: 'Another note' });
+  it('rejects a second entry for a date already used by this user', async () => {
+    await journal.save(draft('2026-03-10'));
+    const duplicate = await journal.save({ ...draft('2026-03-10'), title: 'Another note' });
 
-    expect(existing.status).toBe('saved');
     expect(duplicate.status).toBe('duplicate');
-    if (existing.status === 'saved' && duplicate.status === 'duplicate') {
-      expect(duplicate.entry.id).toBe(existing.entry.id);
-    }
-    expect(journal.entries()).toHaveLength(1);
+    expect(rows).toHaveLength(1);
   });
 
-  it('preserves creation time when editing and rejects moving onto an occupied date', () => {
-    const journal = new JournalService();
-    const first = journal.save(draft('2026-03-10'));
-    const second = journal.save(draft('2026-03-09'));
-    expect(first.status).toBe('saved');
-    expect(second.status).toBe('saved');
-    if (first.status !== 'saved' || second.status !== 'saved') return;
+  it('allows the same date for another user and clears the previous cache', async () => {
+    await journal.save(draft('2026-03-10'));
+    authState.set(authenticatedState(USER_B));
+    await journal.whenReady();
 
-    const duplicate = journal.save(draft('2026-03-09'), first.entry.id);
-    const updated = journal.save({ ...draft('2026-03-10'), title: 'Revised' }, first.entry.id);
+    const result = await journal.save(draft('2026-03-10'));
 
-    expect(duplicate.status).toBe('duplicate');
+    expect(result.status).toBe('saved');
+    expect(rows.map((entry) => entry.user_id)).toEqual([USER_A, USER_B]);
+    expect(journal.entries().map((entry) => entry.userId)).toEqual([USER_B]);
+  });
+
+  it('preserves creation time when editing', async () => {
+    const created = await journal.save(draft('2026-03-10'));
+    expect(created.status).toBe('saved');
+    if (created.status !== 'saved') return;
+
+    const updated = await journal.save({ ...draft('2026-03-10'), title: 'Revised' }, created.entry.id);
+
     expect(updated.status).toBe('saved');
     if (updated.status === 'saved') {
-      expect(updated.entry.createdAt).toBe(first.entry.createdAt);
-      expect(Date.parse(updated.entry.updatedAt)).toBeGreaterThan(
-        Date.parse(first.entry.updatedAt),
-      );
+      expect(updated.entry.createdAt).toBe(created.entry.createdAt);
       expect(updated.entry.title).toBe('Revised');
     }
-    expect(journal.entries()).toHaveLength(2);
   });
 
-  it('keeps other local identities isolated without overwriting their records', () => {
-    const otherEntry: JournalEntry = {
-      id: 'other-entry',
-      userId: 'another-local-user',
-      ...draft('2026-03-08'),
-      createdAt: '2026-03-08T09:00:00.000Z',
-      updatedAt: '2026-03-08T09:00:00.000Z',
-    };
-    localStorage.setItem(ENTRIES_KEY, JSON.stringify([otherEntry]));
+  it('deletes only after the remote row is deleted', async () => {
+    const created = await journal.save(draft('2026-03-10'));
+    expect(created.status).toBe('saved');
+    if (created.status !== 'saved') return;
 
-    const journal = new JournalService();
+    const result = await journal.delete(created.entry.id);
+
+    expect(result.status).toBe('deleted');
+    expect(rows).toEqual([]);
     expect(journal.entries()).toEqual([]);
-    journal.save(draft('2026-03-10'));
-
-    const savedEntries = JSON.parse(localStorage.getItem(ENTRIES_KEY) ?? '[]') as JournalEntry[];
-    expect(savedEntries.map((entry) => entry.userId)).toEqual([
-      'another-local-user',
-      USER_ID,
-    ]);
   });
 
-  it('loads entries again after the service is recreated and supports deletion', () => {
-    const firstService = new JournalService();
-    const result = firstService.save(draft('2026-03-10'));
-    expect(result.status).toBe('saved');
-    if (result.status !== 'saved') return;
+  it('does not expose or write journal data while anonymous', async () => {
+    authState.set({ status: 'anonymous' });
+    await journal.whenReady();
 
-    const refreshedService = new JournalService();
-    expect(refreshedService.getById(result.entry.id)?.title).toBe('A day kept');
-    expect(refreshedService.delete(result.entry.id)).toBe(true);
-    expect(refreshedService.entries()).toEqual([]);
-  });
+    const result = await journal.save(draft('2026-03-10'));
 
-  it('creates at least 25 varied initial entries only once for an empty local journal', () => {
-    localStorage.removeItem(SEED_KEY);
-    const journal = new JournalService();
-    const entries = journal.entries();
-
-    expect(entries.length).toBeGreaterThanOrEqual(25);
-    expect(new Set(entries.map((entry) => entry.date)).size).toBe(entries.length);
-    expect(new Set(entries.map((entry) => entry.createdAt.slice(11, 16))).size).toBeGreaterThan(5);
-    expect(entries.every((entry) => entry.userId === USER_ID)).toBe(true);
-    expect(localStorage.getItem(SEED_KEY)).toBe('true');
-  });
-
-  it('does not recreate initial entries after they have all been deleted', () => {
-    localStorage.removeItem(SEED_KEY);
-    const journal = new JournalService();
-    for (const entry of journal.entries()) journal.delete(entry.id);
-
-    const refreshedService = new JournalService();
-    expect(refreshedService.entries()).toEqual([]);
+    expect(journal.entries()).toEqual([]);
+    expect(result.status).toBe('error');
+    expect(rows).toEqual([]);
   });
 });
 
+function authenticatedState(userId: string): AuthState {
+  const session = {
+    access_token: 'test-access-token',
+    refresh_token: 'test-refresh-token',
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: 1_900_000_000,
+    user: { id: userId, email: `${userId}@example.test` },
+  } as unknown as Session;
+  return { status: 'authenticated', session };
+}
+
 function draft(date: string): JournalDraft {
+  return { date, title: 'A day kept', content: 'A few honest lines.', mood: 'good' };
+}
+
+function row(id: string, userId: string, date: string): TestRow {
+  const timestamp = `${date}T09:00:00.000Z`;
   return {
-    date,
+    id,
+    user_id: userId,
+    entry_date: date,
     title: 'A day kept',
     content: 'A few honest lines.',
     mood: 'good',
+    created_at: timestamp,
+    updated_at: timestamp,
   };
+}
+
+function createClient(database: TestRow[]): SupabaseClient {
+  return {
+    from: () => ({
+      select: () => new Query(database, 'select'),
+      insert: (payload: unknown) => new Query(database, 'insert', payload),
+      update: (payload: unknown) => new Query(database, 'update', payload),
+      delete: () => new Query(database, 'delete'),
+    }),
+  } as unknown as SupabaseClient;
+}
+
+type QueryAction = 'select' | 'insert' | 'update' | 'delete';
+type QueryResult = {
+  data: TestRow | TestRow[] | { id: string } | null;
+  error: { code: string } | null;
+};
+
+class Query {
+  private readonly filters = new Map<string, string>();
+  private singleResult = false;
+
+  constructor(
+    private readonly database: TestRow[],
+    private readonly action: QueryAction,
+    private readonly payload?: unknown,
+  ) {}
+
+  select(): this { return this; }
+  order(): this { return this; }
+  eq(field: string, value: string): this {
+    this.filters.set(field, value);
+    return this;
+  }
+  single(): Promise<QueryResult> {
+    this.singleResult = true;
+    return Promise.resolve(this.execute());
+  }
+  maybeSingle(): Promise<QueryResult> {
+    this.singleResult = true;
+    return Promise.resolve(this.execute());
+  }
+  then<TResult1 = QueryResult, TResult2 = never>(
+    onfulfilled?: ((value: QueryResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    return Promise.resolve(this.execute()).then(onfulfilled, onrejected);
+  }
+
+  private execute(): QueryResult {
+    if (this.action === 'insert') return this.insertRow();
+    const index = this.database.findIndex((entry) => this.matches(entry));
+    if (this.action === 'delete') {
+      if (index < 0) return { data: null, error: null };
+      const [deleted] = this.database.splice(index, 1);
+      return { data: deleted ? { id: deleted.id } : null, error: null };
+    }
+    if (this.action === 'update') {
+      if (index < 0) return { data: null, error: null };
+      const updated = { ...this.database[index], ...(this.payload as Partial<TestRow>) } as TestRow;
+      this.database[index] = updated;
+      return { data: this.singleResult ? updated : [updated], error: null };
+    }
+    const matches = this.database.filter((entry) => this.matches(entry));
+    return { data: this.singleResult ? matches[0] ?? null : matches, error: null };
+  }
+
+  private insertRow(): QueryResult {
+    const inserted = this.payload as TestRow;
+    const duplicate = this.database.some((entry) =>
+      entry.user_id === inserted.user_id && entry.entry_date === inserted.entry_date,
+    );
+    if (duplicate) return { data: null, error: { code: '23505' } };
+    this.database.push(inserted);
+    return { data: inserted, error: null };
+  }
+
+  private matches(entry: TestRow): boolean {
+    return [...this.filters].every(([field, value]) => entry[field as keyof TestRow] === value);
+  }
 }

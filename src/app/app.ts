@@ -8,6 +8,8 @@ import {
   RouterOutlet,
 } from '@angular/router';
 import { filter, map } from 'rxjs';
+import { AuthService } from './core/services/auth.service';
+import { JournalService } from './core/services/journal.service';
 
 const THEME_STORAGE_KEY = 'daily-dot.theme.v1';
 
@@ -16,6 +18,9 @@ const THEME_STORAGE_KEY = 'daily-dot.theme.v1';
   selector: 'app-root',
   styleUrl: './app.css',
   template: `
+    @if (isAuthRoute()) {
+      <router-outlet />
+    } @else {
     <a class="skip-link" href="#main-content">Skip to content</a>
     <div class="app-shell" [class.theme-dark]="darkMode()">
       <aside class="side-rail" aria-label="Primary navigation">
@@ -36,10 +41,16 @@ const THEME_STORAGE_KEY = 'daily-dot.theme.v1';
           </a>
         </nav>
         <div class="rail-footer">
-          <div class="local-profile">
-            <span class="profile-initial">D</span>
-            <span><strong>Your journal</strong><small>Saved on this device</small></span>
-          </div>
+          @if (auth.user(); as user) {
+            <div class="local-profile">
+              <span class="profile-initial">{{ user.email?.[0] ?? 'A' }}</span>
+              <span><strong>{{ user.email ?? 'Your account' }}</strong><small>Private account</small></span>
+            </div>
+            @if (signOutError()) {
+              <p class="field-error" role="alert">{{ signOutError() }}</p>
+            }
+            <button class="theme-toggle sign-out-button" type="button" (click)="signOut()">Sign out</button>
+          }
           <button class="theme-toggle" type="button" (click)="toggleTheme()" [attr.aria-label]="darkMode() ? 'Switch to light theme' : 'Switch to dark theme'" [attr.title]="darkMode() ? 'Switch to light theme' : 'Switch to dark theme'">
             <span aria-hidden="true">{{ darkMode() ? '☼' : '◐' }}</span>
             <span>{{ darkMode() ? 'Light theme' : 'Dark theme' }}</span>
@@ -60,14 +71,31 @@ const THEME_STORAGE_KEY = 'daily-dot.theme.v1';
           <a routerLink="/" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" ariaCurrentWhenActive="page">Home</a>
           <a routerLink="/journal" [class.is-active]="journalSectionActive()" [attr.aria-current]="journalSectionActive() ? 'page' : null">My Journal</a>
           <a routerLink="/journal/new" routerLinkActive="is-active" ariaCurrentWhenActive="page">＋ New</a>
+          @if (auth.user()) {
+            <button type="button" (click)="signOut()">Sign out</button>
+          }
         </nav>
+        @if (signOutError()) {
+          <p class="field-error" role="alert">{{ signOutError() }}</p>
+        }
+        @if (journal.error()) {
+          <div class="notice notice-error" role="alert">
+            <span>{{ journal.error() }}</span>
+            @if (auth.state().status === 'authenticated') {
+              <button class="text-button" type="button" (click)="retryJournalLoad()">Retry</button>
+            }
+          </div>
+        }
         <router-outlet />
       </main>
     </div>
+    }
   `,
 })
 export class App {
   private readonly router = inject(Router);
+  readonly auth = inject(AuthService);
+  readonly journal = inject(JournalService);
   private readonly currentUrl = toSignal(
     this.router.events.pipe(
       filter((event): event is NavigationEnd => event instanceof NavigationEnd),
@@ -75,6 +103,8 @@ export class App {
     ),
     { initialValue: this.router.url },
   );
+  readonly isAuthRoute = computed(() => this.currentUrl().split(/[?#]/)[0].startsWith('/auth/'));
+  readonly signOutError = signal('');
   readonly darkMode = signal(localStorage.getItem(THEME_STORAGE_KEY) === 'dark');
   readonly journalSectionActive = computed(() => {
     const path = this.currentUrl().split(/[?#]/)[0];
@@ -85,5 +115,19 @@ export class App {
     const dark = !this.darkMode();
     this.darkMode.set(dark);
     localStorage.setItem(THEME_STORAGE_KEY, dark ? 'dark' : 'light');
+  }
+
+  async signOut(): Promise<void> {
+    this.signOutError.set('');
+    const result = await this.auth.signOut();
+    if (result.status === 'error') {
+      this.signOutError.set(result.message);
+      return;
+    }
+    await this.router.navigateByUrl('/auth/sign-in');
+  }
+
+  async retryJournalLoad(): Promise<void> {
+    await this.journal.retryLoad();
   }
 }

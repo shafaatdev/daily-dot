@@ -28,4 +28,10 @@ export interface JournalDraft {
 
 export type SaveJournalResult =
   | { status: 'saved'; entry: JournalEntry }
-  | { status: 'duplicate'; entry: JournalEntry };
+  | { status: 'duplicate'; entry: JournalEntry }
+  | { status: 'error'; message: string };
+
+export type DeleteJournalResult =
+  | { status: 'deleted' }
+  | { status: 'not-found' }
+  | { status: 'error'; message: string };

@@ -37,6 +37,7 @@ export class JournalEditor {
   readonly missingEntry = signal(false);
   readonly duplicateEntryId = signal<string | undefined>(undefined);
   readonly saveError = signal('');
+  readonly saving = signal(false);
   readonly form = new FormGroup<JournalForm>({
     date: new FormControl(this.today, {
       nonNullable: true,
@@ -86,22 +87,29 @@ export class JournalEditor {
     this.form.controls.date.markAsTouched();
   }
 
-  save(): void {
+  async save(): Promise<void> {
     this.form.markAllAsTouched();
-    if (this.form.invalid || this.missingEntry()) return;
+    if (this.form.invalid || this.missingEntry() || this.saving()) return;
 
     const draft: JournalDraft = this.form.getRawValue();
     this.duplicateEntryId.set(undefined);
     this.saveError.set('');
+    this.saving.set(true);
     try {
-      const result = this.journal.save(draft, this.entryId());
+      const result = await this.journal.save(draft, this.entryId());
+      if (result.status === 'error') {
+        this.saveError.set(result.message);
+        return;
+      }
       if (result.status === 'duplicate') {
         this.duplicateEntryId.set(result.entry.id);
         return;
       }
       void this.router.navigate(['/journal', result.entry.id]);
     } catch {
-      this.saveError.set('Your entry could not be saved in this browser. Check available storage and try again.');
+      this.saveError.set('Your entry could not be saved. Check your connection and try again.');
+    } finally {
+      this.saving.set(false);
     }
   }
 }

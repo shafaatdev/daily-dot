@@ -1,15 +1,32 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { App } from './app';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AuthService } from './core/services/auth.service';
+import { JournalService } from './core/services/journal.service';
 
 describe('App', () => {
   beforeEach(async () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter(routes)],
+      providers: [
+        provideRouter(routes),
+        {
+          provide: AuthService,
+          useValue: {
+            state: signal({ status: 'anonymous' }),
+            user: signal(null),
+            signOut: vi.fn(async () => ({ status: 'success' })),
+          },
+        },
+        {
+          provide: JournalService,
+          useValue: { error: signal(null), retryLoad: vi.fn(async () => undefined) },
+        },
+      ],
     })
       .compileComponents();
   });

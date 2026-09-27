@@ -3,7 +3,7 @@
     <div class="empty-state">
       <span class="empty-mark" aria-hidden="true">◌</span>
       <h1>Entry not found</h1>
-      <p>It may have been deleted, or it belongs to another local profile.</p>
+      <p>It may have been deleted, or it belongs to another account.</p>
       <a class="button button-primary" routerLink="/journal">Back to My Journal</a>
     </div>
   } @else {
@@ -83,7 +83,9 @@
 
       <footer class="editor-actions">
         <a class="button button-quiet" routerLink="/journal">Cancel</a>
-        <button class="button button-primary" type="submit">Save entry <span aria-hidden="true">→</span></button>
+        <button class="button button-primary" type="submit" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save entry' }} <span aria-hidden="true">→</span>
+        </button>
       </footer>
     </form>
   }
